@@ -8,9 +8,10 @@ mod self_update;
 mod toolchain;
 mod util;
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::fs;
+use std::process::Command;
 
 use crate::archive::{extract_toolchain, validate_toolchain};
 use crate::checksum::verify_sha256;
@@ -25,6 +26,7 @@ use crate::self_update::self_update;
 use crate::toolchain::{
     activate_toolchain, ensure_layout, list_releases, print_path_hint, refresh_proxies, uninstall,
 };
+use crate::util::run_command;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -77,6 +79,7 @@ async fn install(cfg: &Config, requested: &str) -> Result<()> {
     check_system_libraries(cfg, &archive_path, &version)?;
 
     let install_dir = extract_toolchain(cfg, &archive_path, &version)?;
+    install_prerequisites(&install_dir, &host)?;
     validate_toolchain(&install_dir)?;
     activate_toolchain(cfg, &version)?;
     refresh_proxies(cfg)?;
@@ -84,6 +87,36 @@ async fn install(cfg: &Config, requested: &str) -> Result<()> {
 
     println!("installed {version} for {}", artifact.host);
     print_path_hint(cfg);
+    Ok(())
+}
+
+fn install_prerequisites(install_dir: &std::path::Path, host: &str) -> Result<()> {
+    let script_path = {
+        let script_dir_path = install_dir.join("script").join("prerequisite.sh");
+        if script_dir_path.is_file() {
+            script_dir_path
+        } else {
+            let legacy_path = install_dir.join("build-release").join("prerequisite.sh");
+            if legacy_path.is_file() {
+                legacy_path
+            } else {
+                bail!(
+                    "prerequisite script not found in extracted toolchain: {} or {}",
+                    install_dir.join("script").join("prerequisite.sh").display(),
+                    install_dir.join("build-release").join("prerequisite.sh").display()
+                );
+            }
+        }
+    };
+    run_command(
+        Command::new("sh")
+            .arg(&script_path)
+            .arg("--install-dir")
+            .arg(install_dir)
+            .arg("--target")
+            .arg(host),
+    )
+    .with_context(|| format!("install prerequisites via {}", script_path.display()))?;
     Ok(())
 }
 
