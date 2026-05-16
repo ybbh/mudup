@@ -7,12 +7,17 @@
 Install `mudup` from its release artifact, then run:
 
 ```bash
-REPO="$(git config --get remote.origin.url | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
-curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/${REPO}/releases/download/latest/mudup-init.sh" | sh
+curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/scuptio/mudup/releases/download/latest/mudup-init.sh" | sh
 mudup --help
 ```
 
-Permanent download link templates:
+Use another repository:
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/scuptio/mudup/releases/download/latest/mudup-init.sh" | sh -s -- <owner>/<repo>
+```
+
+Download link templates:
 
 ```text
 https://github.com/<owner>/<repo>/releases/download/latest/mudup-init.sh

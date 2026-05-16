@@ -22,31 +22,6 @@ need_cmd install
 need_cmd mktemp
 need_cmd find
 
-detect_repo_from_git_origin() {
-  if ! command -v git >/dev/null 2>&1; then
-    return 1
-  fi
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    return 1
-  fi
-
-  ORIGIN_URL="$(git config --get remote.origin.url 2>/dev/null || true)"
-  if [ -z "${ORIGIN_URL}" ]; then
-    return 1
-  fi
-
-  REPO_FROM_ORIGIN="$(
-    printf '%s\n' "${ORIGIN_URL}" | sed -nE \
-      -e 's#^https?://github\.com/([^/]+/[^/]+?)(\.git)?$#\1#p' \
-      -e 's#^git@github\.com:([^/]+/[^/]+?)(\.git)?$#\1#p'
-  )"
-  if [ -n "${REPO_FROM_ORIGIN}" ]; then
-    printf '%s\n' "${REPO_FROM_ORIGIN}"
-    return 0
-  fi
-  return 1
-}
-
 normalize_repo() {
   # Accept either full GitHub URL or owner/repo and strip trailing .git.
   printf '%s\n' "$1" | sed -E \
@@ -55,9 +30,9 @@ normalize_repo() {
     -e 's#/$##'
 }
 
-REPO="$(normalize_repo "$(detect_repo_from_git_origin || true)")"
+REPO="$(normalize_repo "${1:-scuptio/mudup}")"
 if [ -z "${REPO}" ]; then
-  echo "error: cannot determine GitHub repository from git remote origin." >&2
+  echo "error: invalid repository. Usage: $0 [owner/repo|github_url]" >&2
   exit 1
 fi
 
