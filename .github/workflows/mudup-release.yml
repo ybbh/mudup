@@ -1,0 +1,161 @@
+name: mudup-release
+
+on:
+  push:
+    tags:
+      - 'mudup-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example v20260516.1200'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: mudup release
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve mudup directory
+        run: |
+          if [[ -f "mudup/Cargo.toml" ]]; then
+            echo "MUDUP_DIR=mudup" >> "$GITHUB_ENV"
+          elif [[ -f "Cargo.toml" ]]; then
+            echo "MUDUP_DIR=." >> "$GITHUB_ENV"
+          else
+            echo "Cannot locate mudup Cargo.toml" >&2
+            exit 1
+          fi
+
+      - name: Resolve release version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && -n "${GITHUB_REF_NAME}" ]]; then
+            RAW_TAG="${GITHUB_REF_NAME}"
+            VERSION="${RAW_TAG#mudup-}"
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="v$(date -u +'%Y%m%d.%H%M')"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=mudup-${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Rust Nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ env.MUDUP_DIR }}/target
+          key: ${{ runner.os }}-mudup-release-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mudup-release-
+
+      - name: Build mudup binary
+        run: cd "${MUDUP_DIR}" && cargo build --release --locked
+
+      - name: Package artifacts
+        id: package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TARGET="x86_64-unknown-linux-gnu"
+          OUT_DIR="${MUDUP_DIR}/target/release-artifacts/${VERSION}"
+          PKG_DIR="${OUT_DIR}/${VERSION}"
+          BIN_DIR="${PKG_DIR}/bin"
+          ARCHIVE="mudup-${VERSION}-${TARGET}.tar.gz"
+          LATEST_ARCHIVE="mudup-${TARGET}.tar.gz"
+
+          rm -rf "${OUT_DIR}"
+          mkdir -p "${BIN_DIR}"
+          cp "${MUDUP_DIR}/target/release/mudup" "${BIN_DIR}/mudup"
+
+          printf '%s\n' \
+            "name=mudup" \
+            "version=${VERSION}" \
+            "target=${TARGET}" \
+            "archive=${ARCHIVE}" \
+            "bin_dir=bin" \
+            "" \
+            "[files]" \
+            "bin/mudup" > "${PKG_DIR}/manifest.txt"
+
+          tar -czf "${OUT_DIR}/${ARCHIVE}" -C "${OUT_DIR}" "${VERSION}"
+          sha256sum "${OUT_DIR}/${ARCHIVE}" > "${OUT_DIR}/${ARCHIVE}.sha256"
+          cp "${OUT_DIR}/${ARCHIVE}" "${OUT_DIR}/${LATEST_ARCHIVE}"
+          sha256sum "${OUT_DIR}/${LATEST_ARCHIVE}" > "${OUT_DIR}/${LATEST_ARCHIVE}.sha256"
+          if [[ -f "${MUDUP_DIR}/script/install/mudup-init.sh" ]]; then
+            cp "${MUDUP_DIR}/script/install/mudup-init.sh" "${OUT_DIR}/mudup-init.sh"
+          else
+            echo "mudup-init.sh not found" >&2
+            exit 1
+          fi
+
+          echo "artifact_dir=${OUT_DIR}" >> "$GITHUB_OUTPUT"
+          echo "archive=${ARCHIVE}" >> "$GITHUB_OUTPUT"
+          echo "latest_archive=${LATEST_ARCHIVE}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARTIFACT_DIR="${{ steps.package.outputs.artifact_dir }}"
+          CHANGELOG_FILE="${ARTIFACT_DIR}/CHANGELOG_RELEASE.md"
+
+          echo "# Changelog: ${VERSION}" > "${CHANGELOG_FILE}"
+          echo >> "${CHANGELOG_FILE}"
+          echo "## Changes" >> "${CHANGELOG_FILE}"
+          echo >> "${CHANGELOG_FILE}"
+
+          PREV_TAG=$(git tag --sort=-v:refname | grep '^mudup-v' | grep -v "^mudup-${VERSION}$" | head -1)
+          if [[ -n "${PREV_TAG}" ]]; then
+            echo "Changes since ${PREV_TAG}:" >> "${CHANGELOG_FILE}"
+            echo >> "${CHANGELOG_FILE}"
+            git log "${PREV_TAG}..HEAD" --pretty=format:"- %s (%h)" -- "${MUDUP_DIR}" "${MUDUP_DIR}/.github/workflows/mudup-build.yml" "${MUDUP_DIR}/.github/workflows/mudup-release.yml" >> "${CHANGELOG_FILE}"
+          else
+            echo "Initial mudup release:" >> "${CHANGELOG_FILE}"
+            echo >> "${CHANGELOG_FILE}"
+            git log --pretty=format:"- %s (%h)" -- "${MUDUP_DIR}" "${MUDUP_DIR}/.github/workflows/mudup-build.yml" "${MUDUP_DIR}/.github/workflows/mudup-release.yml" >> "${CHANGELOG_FILE}"
+          fi
+
+      - name: Create GitHub Release
+        if: ${{ env.GITHUB_TOKEN != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "mudup ${{ steps.version.outputs.version }}"
+          body_path: ${{ steps.package.outputs.artifact_dir }}/CHANGELOG_RELEASE.md
+          files: |
+            ${{ steps.package.outputs.artifact_dir }}/*.tar.gz
+            ${{ steps.package.outputs.artifact_dir }}/*.sha256
+          draft: false
+          prerelease: ${{ inputs.prerelease || false }}
+          generate_release_notes: false
+
+      - name: Verify release assets
+        run: |
+          ls -lh "${{ steps.package.outputs.artifact_dir }}"

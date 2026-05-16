@@ -1,0 +1,60 @@
+name: mudup-build
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'mudup/**'
+      - 'mudup/.github/workflows/mudup-build.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'mudup/**'
+      - 'mudup/.github/workflows/mudup-build.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: mudup build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Resolve mudup directory
+        run: |
+          if [[ -f "mudup/Cargo.toml" ]]; then
+            echo "MUDUP_DIR=mudup" >> "$GITHUB_ENV"
+          elif [[ -f "Cargo.toml" ]]; then
+            echo "MUDUP_DIR=." >> "$GITHUB_ENV"
+          else
+            echo "Cannot locate mudup Cargo.toml" >&2
+            exit 1
+          fi
+
+      - name: Setup Rust Nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ${{ env.MUDUP_DIR }}/target
+          key: ${{ runner.os }}-mudup-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mudup-
+
+      - name: Check
+        run: cd "${MUDUP_DIR}" && cargo check --locked
+
+      - name: Build release
+        run: cd "${MUDUP_DIR}" && cargo build --release --locked
