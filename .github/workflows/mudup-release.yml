@@ -152,6 +152,30 @@ jobs:
           prerelease: false
           generate_release_notes: false
 
+      - name: Move latest tag to current commit
+        if: ${{ env.GITHUB_TOKEN != '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f latest "${GITHUB_SHA}"
+          git push origin refs/tags/latest --force
+
+      - name: Publish latest release assets
+        if: ${{ env.GITHUB_TOKEN != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "mudup latest"
+          body: "Rolling latest assets for mudup."
+          files: |
+            ${{ steps.package.outputs.artifact_dir }}/mudup-init.sh
+            ${{ steps.package.outputs.artifact_dir }}/${{ steps.package.outputs.latest_archive }}
+            ${{ steps.package.outputs.artifact_dir }}/${{ steps.package.outputs.latest_archive }}.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          overwrite_files: true
+
       - name: Verify release assets
         run: |
           ls -lh "${{ steps.package.outputs.artifact_dir }}"
