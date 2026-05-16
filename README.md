@@ -7,7 +7,7 @@
 Install `mudup` from its release artifact, then run:
 
 ```bash
-REPO="$(git config --get remote.origin.url | sed -E 's#(git@github.com:|https://github.com/)##; s#\\.git$##')"
+REPO="$(git config --get remote.origin.url | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')"
 curl --proto '=https' --tlsv1.2 -fsSL "https://github.com/${REPO}/releases/download/latest/mudup-init.sh" | sh
 mudup --help
 ```

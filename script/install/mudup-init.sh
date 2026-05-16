@@ -47,7 +47,15 @@ detect_repo_from_git_origin() {
   return 1
 }
 
-REPO="$(detect_repo_from_git_origin || true)"
+normalize_repo() {
+  # Accept either full GitHub URL or owner/repo and strip trailing .git.
+  printf '%s\n' "$1" | sed -E \
+    -e 's#^(git@github\.com:|https?://github\.com/)##' \
+    -e 's#\.git$##' \
+    -e 's#/$##'
+}
+
+REPO="$(normalize_repo "$(detect_repo_from_git_origin || true)")"
 if [ -z "${REPO}" ]; then
   echo "error: cannot determine GitHub repository from git remote origin." >&2
   exit 1
