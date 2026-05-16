@@ -7,7 +7,7 @@
 Install `mudup` from its release artifact, then run:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://github.com/scuptio/mududb/releases/latest/download/mudup-init.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/scuptio/mudup/releases/latest/download/mudup-init.sh | sh
 mudup --help
 ```
 

@@ -10,11 +10,6 @@ on:
         description: 'Release version, for example v20260516.1200'
         required: false
         type: string
-      prerelease:
-        description: 'Mark as pre-release'
-        required: false
-        type: boolean
-        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -152,8 +147,9 @@ jobs:
           files: |
             ${{ steps.package.outputs.artifact_dir }}/*.tar.gz
             ${{ steps.package.outputs.artifact_dir }}/*.sha256
+            ${{ steps.package.outputs.artifact_dir }}/mudup-init.sh
           draft: false
-          prerelease: ${{ inputs.prerelease || false }}
+          prerelease: false
           generate_release_notes: false
 
       - name: Verify release assets
