@@ -7,15 +7,15 @@
 Install `mudup` from its release artifact, then run:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL https://github.com/scuptio/mudup/releases/latest/download/mudup-init.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL https://github.com/ybbh/mudup/releases/download/latest/mudup-init.sh | sh
 mudup --help
 ```
 
 Permanent download link templates:
 
 ```text
-https://github.com/<owner>/<repo>/releases/latest/download/mudup-init.sh
-https://github.com/<owner>/<repo>/releases/latest/download/mudup-x86_64-unknown-linux-gnu.tar.gz
+https://github.com/<owner>/<repo>/releases/download/latest/mudup-init.sh
+https://github.com/<owner>/<repo>/releases/download/latest/mudup-x86_64-unknown-linux-gnu.tar.gz
 ```
 
 `mudup-init.sh` downloads the latest `mudup` binary, verifies SHA256, installs it to `${HOME}/.local/bin`, and updates

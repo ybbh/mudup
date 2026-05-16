@@ -166,7 +166,7 @@ jobs:
         with:
           tag_name: latest
           name: "mudup latest"
-          body: "Rolling latest assets for mudup."
+          body: "Rolling latest [${{ steps.version.outputs.version }}](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}) assets for mudup."
           files: |
             ${{ steps.package.outputs.artifact_dir }}/mudup-init.sh
             ${{ steps.package.outputs.artifact_dir }}/${{ steps.package.outputs.latest_archive }}
