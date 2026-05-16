@@ -1,7 +1,6 @@
 #!/usr/bin/env sh
 set -eu
 
-REPO="${MUDUP_INIT_REPO:-scuptio/mudup}"
 TARGET="${MUDUP_INIT_TARGET:-x86_64-unknown-linux-gnu}"
 INSTALL_BIN_DIR="${HOME}/.local/bin"
 MUDUP_HOME_DIR="${MUDUP_HOME:-${HOME}/.mududb}"
@@ -23,6 +22,45 @@ need_cmd install
 need_cmd mktemp
 need_cmd find
 
+detect_repo_from_git_origin() {
+  if ! command -v git >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 1
+  fi
+
+  ORIGIN_URL="$(git config --get remote.origin.url 2>/dev/null || true)"
+  if [ -z "${ORIGIN_URL}" ]; then
+    return 1
+  fi
+
+  REPO_FROM_ORIGIN="$(
+    printf '%s\n' "${ORIGIN_URL}" | sed -nE \
+      -e 's#^https?://github\.com/([^/]+/[^/]+?)(\.git)?$#\1#p' \
+      -e 's#^git@github\.com:([^/]+/[^/]+?)(\.git)?$#\1#p'
+  )"
+  if [ -n "${REPO_FROM_ORIGIN}" ]; then
+    printf '%s\n' "${REPO_FROM_ORIGIN}"
+    return 0
+  fi
+  return 1
+}
+
+normalize_repo() {
+  # Accept either full GitHub URL or owner/repo and strip trailing .git.
+  printf '%s\n' "$1" | sed -E \
+    -e 's#^(git@github\.com:|https?://github\.com/)##' \
+    -e 's#\.git$##' \
+    -e 's#/$##'
+}
+
+REPO="$(normalize_repo "$(detect_repo_from_git_origin || true)")"
+if [ -z "${REPO}" ]; then
+  echo "error: cannot determine GitHub repository from git remote origin." >&2
+  exit 1
+fi
+
 TMP_DIR="$(mktemp -d)"
 cleanup() {
   rm -rf "${TMP_DIR}"
@@ -38,7 +76,12 @@ curl -fsSL "${SHA256_URL}" -o "${TMP_DIR}/${ARCHIVE}.sha256"
 
 (
   cd "${TMP_DIR}"
-  sha256sum -c "${ARCHIVE}.sha256"
+  CHECKSUM="$(awk 'NF { print $1; exit }' "${ARCHIVE}.sha256")"
+  if [ -z "${CHECKSUM}" ]; then
+    echo "error: empty checksum file ${ARCHIVE}.sha256" >&2
+    exit 1
+  fi
+  printf '%s  %s\n' "${CHECKSUM}" "${ARCHIVE}" | sha256sum -c -
 )
 
 tar -xzf "${TMP_DIR}/${ARCHIVE}" -C "${TMP_DIR}"
